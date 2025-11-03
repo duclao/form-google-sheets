@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Formulário → Google Sheets</title>
+  <style>
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background: #f6f7f9; }
+    .wrap { max-width: 720px; margin: 24px auto; padding: 16px; }
+    .card { background: #fff; border-radius: 14px; box-shadow: 0 6px 18px rgba(0,0,0,.06); padding: 18px; }
+    h1 { font-size: 20px; margin: 0 0 12px; }
+    label { display: block; font-size: 14px; margin: 12px 0 6px; }
+    input, button { width: 100%; padding: 12px; border-radius: 10px; border: 1px solid #e3e6ea; font-size: 16px; }
+    input:focus { outline: 2px solid #d7e4ff; border-color: #b7cdfc; }
+    button { border: 0; cursor: pointer; margin-top: 14px; font-weight: 600; background: #0f62fe; color: #fff; }
+    button:disabled { opacity: .6; cursor: not-allowed; }
+    .msg { margin-top: 10px; font-size: 14px; }
+    .ok { color: #1a7f37; }
+    .err { color: #a40000; }
+    .table-card { margin-top: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 10px; border-bottom: 1px solid #eef0f3; }
+    th { background: #f2f5ff; }
+    .muted { color: #6b7280; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Cadastro rápido</h1>
+      <p class="muted">Grava nome e telefone na planilha do Google via Apps Script.</p>
+
+      <form id="form">
+        <label for="nome">Nome</label>
+        <input id="nome" name="nome" placeholder="Ex.: Maria Silva" required />
+
+        <label for="tel">Telefone</label>
+        <input id="tel" name="telefone" inputmode="tel" placeholder="Ex.: (75) 9 9999-9999" required />
+
+        <button id="btn" type="submit">Enviar</button>
+        <div id="msg" class="msg"></div>
+      </form>
+    </div>
+
+    <div class="card table-card">
+      <h1>Registros</h1>
+      <p class="muted">Carrega os dados atuais da planilha (GET).</p>
+      <div id="tableWrap">
+        <p class="muted">Carregando...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // SUA API (Apps Script) – já com a URL que você enviou
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby_ZgJeehVM7LRKWb1xZs7MTvRleRcjzlrPL8wuX_Cy6eF2uN3jbAX51LdTyjxjHmqVqg/exec";
+
+    const form = document.getElementById("form");
+    const btn = document.getElementById("btn");
+    const msg = document.getElementById("msg");
+    const tableWrap = document.getElementById("tableWrap");
+
+    // Enviar (POST) no formato JSON, conforme seu doPost()
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      msg.textContent = "";
+      msg.className = "msg";
+      btn.disabled = true;
+
+      const payload = {
+        nome: form.nome.value.trim(),
+        telefone: form.telefone.value.trim()
+      };
+
+      if (!payload.nome || !payload.telefone) {
+        msg.textContent = "Preencha nome e telefone.";
+        msg.classList.add("err");
+        btn.disabled = false;
+        return;
+      }
+
+      try {
+        const res = await fetch(SCRIPT_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json;charset=utf-8" },
+          body: JSON.stringify(payload)
+        });
+
+        // Se seu doPost retorna "OK"
+        const text = await res.text();
+        if (res.ok && text.toUpperCase().includes("OK")) {
+          msg.textContent = "Enviado com sucesso!";
+          msg.classList.add("ok");
+          form.reset();
+          await carregarTabela(); // atualiza a lista
+        } else {
+          msg.textContent = "Não foi possível salvar. Resposta: " + text;
+          msg.classList.add("err");
+        }
+      } catch (error) {
+        msg.textContent = "Erro de rede: " + error.message;
+        msg.classList.add("err");
+      } finally {
+        btn.disabled = false;
+      }
+    });
+
+    // Listar (GET) – espera que seu doGet retorne JSON com todas as linhas
+    async function carregarTabela() {
+      tableWrap.innerHTML = '<p class="muted">Carregando...</p>';
+      try {
+        const res = await fetch(SCRIPT_URL, { method: "GET" });
+        const data = await res.json(); // [[cab1,cab2,...],[linha1...],...]
+        if (!Array.isArray(data) || data.length === 0) {
+          tableWrap.innerHTML = '<p class="muted">Sem dados ainda.</p>';
+          return;
+        }
+
+        // Constrói a tabela
+        const [headers, ...rows] = data;
+        const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
+        const tbody = `<tbody>${
+          rows.map(r => `<tr>${r.map(v => `<td>${(v ?? "").toString()}</td>`).join("")}</tr>`).join("")
+        }</tbody>`;
+        tableWrap.innerHTML = `<div style="overflow:auto;"><table>${thead}${tbody}</table></div>`;
+      } catch (err) {
+        tableWrap.innerHTML = `<p class="muted">Não foi possível carregar. ${err.message}</p>`;
+      }
+    }
+
+    // Inicializa
+    carregarTabela();
+  </script>
+</body>
+</html>
