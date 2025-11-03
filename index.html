@@ -52,7 +52,7 @@
   </div>
 
   <script>
-    // SUA API (Apps Script) – já com a URL que você enviou
+    // URL do Apps Script (implantação atual “Qualquer pessoa com o link”)
     const SCRIPT_URL = "https://script.google.com/macros/s/AKfycby_ZgJeehVM7LRKWb1xZs7MTvRleRcjzlrPL8wuX_Cy6eF2uN3jbAX51LdTyjxjHmqVqg/exec";
 
     const form = document.getElementById("form");
@@ -60,19 +60,16 @@
     const msg = document.getElementById("msg");
     const tableWrap = document.getElementById("tableWrap");
 
-    // Enviar (POST) no formato JSON, conforme seu doPost()
+    // POST sem headers (application/x-www-form-urlencoded) → evita preflight/CORS
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       msg.textContent = "";
       msg.className = "msg";
       btn.disabled = true;
 
-      const payload = {
-        nome: form.nome.value.trim(),
-        telefone: form.telefone.value.trim()
-      };
-
-      if (!payload.nome || !payload.telefone) {
+      const nome = form.nome.value.trim();
+      const telefone = form.telefone.value.trim();
+      if (!nome || !telefone) {
         msg.textContent = "Preencha nome e telefone.";
         msg.classList.add("err");
         btn.disabled = false;
@@ -80,19 +77,18 @@
       }
 
       try {
-        const res = await fetch(SCRIPT_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json;charset=utf-8" },
-          body: JSON.stringify(payload)
-        });
+        const body = new URLSearchParams();
+        body.append("nome", nome);
+        body.append("telefone", telefone);
 
-        // Se seu doPost retorna "OK"
+        const res = await fetch(SCRIPT_URL, { method: "POST", body });
         const text = await res.text();
+
         if (res.ok && text.toUpperCase().includes("OK")) {
           msg.textContent = "Enviado com sucesso!";
           msg.classList.add("ok");
           form.reset();
-          await carregarTabela(); // atualiza a lista
+          await carregarTabela();
         } else {
           msg.textContent = "Não foi possível salvar. Resposta: " + text;
           msg.classList.add("err");
@@ -105,7 +101,7 @@
       }
     });
 
-    // Listar (GET) – espera que seu doGet retorne JSON com todas as linhas
+    // GET para listar a planilha (primeira linha como cabeçalho)
     async function carregarTabela() {
       tableWrap.innerHTML = '<p class="muted">Carregando...</p>';
       try {
@@ -115,8 +111,6 @@
           tableWrap.innerHTML = '<p class="muted">Sem dados ainda.</p>';
           return;
         }
-
-        // Constrói a tabela
         const [headers, ...rows] = data;
         const thead = `<thead><tr>${headers.map(h => `<th>${h}</th>`).join("")}</tr></thead>`;
         const tbody = `<tbody>${
@@ -128,9 +122,7 @@
       }
     }
 
-    // Inicializa
     carregarTabela();
   </script>
 </body>
 </html>
-
